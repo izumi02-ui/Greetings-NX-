@@ -11,7 +11,8 @@ when they leave). Everything can be configured live in Discord — no code edits
 
 | Feature | Description |
 |---|---|
-| 👋 **Welcome embeds** | Colorful welcome card with avatar, mention & member counter |
+| 👋 **Welcome embeds** | Colorful welcome card with avatar, mention, member counter & bottom banner |
+| 🪪 **Custom icon** | Choose your own profile photo (icon) — or use each member's avatar |
 | 💔 **Goodbye messages** | Posts a farewell when someone leaves |
 | 🎭 **Auto-role** | Assigns a role to every new member automatically |
 | 📨 **Welcome DMs** | Privately DMs each new member (skips users with DMs closed) |
@@ -61,6 +62,11 @@ Open `.env` and fill in at least `DISCORD_TOKEN`:
 | `SYNC_GUILD_ID` | No | Your server ID → slash commands appear instantly |
 | `WELCOME_COLOR` | No | Welcome embed color, hex (default `#5865F2`) |
 | `GOODBYE_COLOR` | No | Goodbye embed color, hex (default `#EB459E`) |
+| `WELCOME_BANNER` | No | Banner image URL shown at the bottom of the welcome embed |
+| `WELCOME_ICON` | No | Custom icon/profile photo URL (else each member's avatar) |
+| `RULES_CHANNEL_ID` | No | Channel linked as "check out to keep The Community safe" |
+| `ROLES_CHANNEL1_ID` | No | First channel linked for picking self & gaming roles |
+| `ROLES_CHANNEL2_ID` | No | Second channel linked for picking self & gaming roles |
 
 **How to get IDs:** User Settings → Advanced → **Developer Mode** ON → right-click a
 channel / role / server → **Copy ID**.
@@ -91,6 +97,10 @@ All commands require **Manage Server** permission and reply privately:
 | `/welcome goodbye <text>` | Customize the goodbye message |
 | `/welcome dm <True/False>` | Turn the welcome DM on/off |
 | `/welcome dm-message <text>` | Customize the DM text |
+| `/welcome banner <url>` | Set the banner image shown at the bottom of the embed |
+| `/welcome banner reset:True` | Restore the default banner |
+| `/welcome icon <url>` | Set the icon/profile photo (else each member's avatar is used) |
+| `/welcome icon clear:True` | Clear the custom icon, back to each member's avatar |
 | `/welcome preview` | Preview the embed before anyone joins |
 | `/welcome settings` | Show the full current config |
 
@@ -103,6 +113,10 @@ All commands require **Manage Server** permission and reply privately:
 | `{user}` | Full username (name + tag) |
 | `{server}` | Your server's name |
 | `{count}` | New member count of the server |
+| `{avatar}` | The member's profile photo URL |
+| `{rules}` | The "rules" channel mention |
+| `{roles1}` | First role-picking channel mention |
+| `{roles2}` | Second role-picking channel mention |
 
 Example: `Welcome {mention}! You are member #{count} of {server} 🎉`
 

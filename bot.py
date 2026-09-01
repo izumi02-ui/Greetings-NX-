@@ -83,15 +83,36 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "welcome_channel": env_int("WELCOME_CHANNEL_ID"),  # channel ID or None (falls back to the system channel)
     "auto_role": env_int("AUTO_ROLE_ID"),              # role ID or None
     "send_dm": True,                                   # DM new members a personal hello?
+    "welcome_title": "Welcome to **THE NEXUS™**",
     "welcome_message": (
-        "Welcome to **{server}**, {mention}! 🎉\n\n"
-        "We're glad to have you here — read the rules and say hi in general chat!"
+        "[New Entry Detected!]({avatar})\n\n"
+        "**• Greetings, {mention} We're glad to have you here •**\n\n"
+        "**• A new user has entered the void! Gear up and get ready for an epic experience.**\n\n"
+        "• Make sure to check out **{rules}** to keep **The Community** safe.\n\n"
+        "• Don't forget to pick **self & gaming roles** in **{roles1}** & **{roles2}**.\n\n"
+        "**| • Let's build the ultimate community together • |**"
     ),
     "goodbye_message": "{name} just left **{server}**. We'll miss you! 👋",
     "dm_message": (
         "Hey {name}! 👋 Welcome to **{server}**! "
         "Take a moment to read the rules, then introduce yourself in general chat. Enjoy your stay!"
     ),
+    "welcome_banner": os.getenv(
+        "WELCOME_BANNER",
+        "https://cdn.discordapp.com/attachments/1460251763881017459/"
+        "1477366736113242192/GitHub_-_U7P4L-IN_Log-In__Set_Password_in_Tarmux_Tarminal_.gif"
+        "?ex=6a97bd3e&is=6a966bbe&hm=0fa4bd07c7246f742b7160e1f86dc5545e897784cf13c0898d19138978311653&",
+    ).strip(),  # large image shown at the BOTTOM of the welcome embed
+    "welcome_footer_text": "| • A public void • ࿐",
+    "welcome_footer_icon": (
+        "https://media.discordapp.net/attachments/1413054941211267173/"
+        "1477662809545511024/db86dee4d0ee23a59f05aca824d65447.jpg"
+        "?ex=6a977f7b&is=6a962dfb&hm=77fb12621f69ce5439e9b4f67d4b8b69d446cea207ea46c3adee2ff55bdc1a85&"
+    ),  # small image in the footer (bottom-left)
+    "rules_channel": os.getenv("RULES_CHANNEL_ID", "1475330506005413929").strip(),
+    "roles_channel1": os.getenv("ROLES_CHANNEL1_ID", "1475537402838782035").strip(),
+    "roles_channel2": os.getenv("ROLES_CHANNEL2_ID", "1475570545885188308").strip(),
+    "welcome_icon": os.getenv("WELCOME_ICON", "").strip() or None,  # custom icon (profile photo); None -> member avatar
 }
 
 SETTINGS_FILE = Path(__file__).resolve().parent / "settings.json"
@@ -168,27 +189,50 @@ async def find_welcome_channel(guild: discord.Guild, settings: dict[str, Any]) -
     return guild.system_channel if isinstance(guild.system_channel, discord.TextChannel) else None
 
 
+def _channel_mention(guild: discord.Guild, channel_id: Any) -> str:
+    """Turn a stored channel ID into a clickable #channel mention (or <#id>)."""
+    if not channel_id:
+        return ""
+    try:
+        channel = guild.get_channel(int(channel_id))
+    except (TypeError, ValueError):
+        channel = None
+    if channel is not None:
+        return channel.mention
+    return f"<#{channel_id}>"
+
+
 def build_welcome_embed(member: discord.Member, settings: dict[str, Any]) -> discord.Embed:
     guild = member.guild
     description = format_message(
         settings.get("welcome_message", DEFAULT_SETTINGS["welcome_message"]),
+        avatar=member.display_avatar.url,
         mention=member.mention,
         name=member.display_name,
         user=str(member),
         server=guild.name,
         count=guild.member_count or 0,
+        rules=_channel_mention(guild, settings.get("rules_channel")),
+        roles1=_channel_mention(guild, settings.get("roles_channel1")),
+        roles2=_channel_mention(guild, settings.get("roles_channel2")),
     )
     embed = discord.Embed(
-        title=f"👋 Welcome, {member.display_name}!",
+        title=settings.get("welcome_title", DEFAULT_SETTINGS["welcome_title"]),
         description=description,
         color=WELCOME_COLOR,
         timestamp=discord.utils.utcnow(),
     )
-    embed.set_thumbnail(url=member.display_avatar.url)
-    embed.set_footer(
-        text=f"Member #{guild.member_count or 0}",
-        icon_url=guild.icon.url if guild.icon else None,
-    )
+    # Small circle profile picture (top-right).
+    icon_url = settings.get("welcome_icon") or member.display_avatar.url
+    embed.set_thumbnail(url=icon_url)
+    # Footer: bottom-left image + its caption.
+    footer_text = settings.get("welcome_footer_text") or ""
+    footer_icon = settings.get("welcome_footer_icon")
+    embed.set_footer(text=footer_text, icon_url=footer_icon)
+    # Banner: large image pinned to the bottom of the embed.
+    banner = settings.get("welcome_banner")
+    if banner:
+        embed.set_image(url=banner)
     return embed
 
 
@@ -555,6 +599,62 @@ class WelcomeGroup(app_commands.Group):
             ephemeral=True,
         )
 
+    @app_commands.command(name="banner", description="Set the banner image shown at the bottom of the welcome embed.")
+    async def banner(
+        self,
+        interaction: discord.Interaction,
+        url: Optional[str] = None,
+        reset: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if reset:
+            store.set(guild.id, welcome_banner=DEFAULT_SETTINGS["welcome_banner"])
+            await interaction.response.send_message("✅ Welcome banner reset to the default.", ephemeral=True)
+            return
+        if url:
+            store.set(guild.id, welcome_banner=url.strip())
+            await interaction.response.send_message(
+                "✅ Welcome banner updated — run `/welcome preview` to see it.", ephemeral=True
+            )
+            return
+        current = store.get(guild.id)["welcome_banner"]
+        await interaction.response.send_message(
+            f"**Current banner:**\n{current}\n\nUse `/welcome banner <url>` to change it, "
+            "or `/welcome banner reset:True` to restore the default.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="icon", description="Set the icon/profile photo shown on the welcome embed.")
+    async def icon(
+        self,
+        interaction: discord.Interaction,
+        url: Optional[str] = None,
+        clear: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if clear:
+            store.set(guild.id, welcome_icon=None)
+            await interaction.response.send_message(
+                "✅ Icon cleared — each new member's own profile photo will be used.", ephemeral=True
+            )
+            return
+        if url:
+            store.set(guild.id, welcome_icon=url.strip())
+            await interaction.response.send_message(
+                "✅ Welcome icon updated — run `/welcome preview` to see it.", ephemeral=True
+            )
+            return
+        current = store.get(guild.id)["welcome_icon"]
+        icon_display = current if current else "each member's own profile photo"
+        await interaction.response.send_message(
+            f"**Current icon:** {icon_display}\n\n"
+            "Use `/welcome icon <url>` to set your own profile photo, "
+            "or `/welcome icon clear:True` to use each member's avatar.",
+            ephemeral=True,
+        )
+
     @app_commands.command(name="settings", description="Show the current welcome-bot configuration.")
     async def settings(self, interaction: discord.Interaction) -> None:
         guild = self._guild(interaction)
@@ -591,6 +691,21 @@ class WelcomeGroup(app_commands.Group):
         embed.add_field(
             name="📬 DM message",
             value=settings["dm_message"][:120] or "*(default)*",
+            inline=False,
+        )
+        embed.add_field(
+            name="🖼️ Banner (bottom)",
+            value=settings["welcome_banner"][:120] or "*(none)*",
+            inline=False,
+        )
+        embed.add_field(
+            name="🪪 Icon",
+            value=settings["welcome_icon"][:120] if settings["welcome_icon"] else "Member's profile photo",
+            inline=False,
+        )
+        embed.add_field(
+            name="🗒️ Footer",
+            value=settings["welcome_footer_text"][:120] or "*(none)*",
             inline=False,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
