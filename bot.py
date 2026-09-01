@@ -3,7 +3,7 @@ Discord Welcome Bot
 ===================
 
 A friendly, configurable Discord bot that welcomes new members to your
-server (and says goodbye when they leave).
+server (and DMs them a goodbye when they leave).
 
 Setup: read README.md. Short version:
   1. Create a bot at https://discord.com/developers/applications
@@ -81,9 +81,9 @@ GOODBYE_COLOR = env_color("GOODBYE_COLOR", "#EB459E")
 # at runtime with the /welcome commands (stored in settings.json).
 DEFAULT_SETTINGS: dict[str, Any] = {
     "welcome_channel": env_int("WELCOME_CHANNEL_ID"),  # channel ID or None (falls back to the system channel)
-    "goodbye_channel": env_int("GOODBYE_CHANNEL_ID"),  # channel ID or None (falls back to the welcome/system channel)
     "auto_role": env_int("AUTO_ROLE_ID"),              # role ID or None
     "send_dm": True,                                   # DM new members a personal hello?
+    "send_goodbye_dm": True,                           # DM members a farewell the moment they leave?
     "welcome_title": "Welcome to **THE NEXUS™**",
     "welcome_message": (
         "[New Entry Detected!]({avatar})\n\n"
@@ -190,21 +190,6 @@ async def find_welcome_channel(guild: discord.Guild, settings: dict[str, Any]) -
     return guild.system_channel if isinstance(guild.system_channel, discord.TextChannel) else None
 
 
-async def find_goodbye_channel(guild: discord.Guild, settings: dict[str, Any]) -> Optional[discord.TextChannel]:
-    """Resolve where goodbye messages go: goodbye channel, else welcome channel, else system channel."""
-    channel_id = settings.get("goodbye_channel")
-    if channel_id is not None:
-        channel = guild.get_channel(channel_id)
-        if channel is None:
-            try:
-                channel = await guild.fetch_channel(channel_id)
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                channel = None
-        if isinstance(channel, discord.TextChannel):
-            return channel
-    return await find_welcome_channel(guild, settings)
-
-
 def _channel_mention(guild: discord.Guild, channel_id: Any) -> str:
     """Turn a stored channel ID into a clickable #channel mention (or <#id>)."""
     if not channel_id:
@@ -262,7 +247,7 @@ def build_goodbye_embed(member: discord.Member, settings: dict[str, Any]) -> dis
         count=guild.member_count or 0,
     )
     embed = discord.Embed(
-        title="👋 Goodbye!",
+        title=f"👋 Goodbye from {guild.name}!",
         description=description,
         color=GOODBYE_COLOR,
         timestamp=discord.utils.utcnow(),
@@ -293,6 +278,19 @@ async def assign_auto_role(member: discord.Member, settings: dict[str, Any]) -> 
         )
     except discord.HTTPException as exc:
         log.warning("Failed to assign auto-role to %s: %s", member, exc)
+
+
+async def send_goodbye_dm(member: discord.Member, settings: dict[str, Any]) -> None:
+    """DM the member a farewell the instant they leave the server."""
+    if not settings.get("send_goodbye_dm", True):
+        return
+    try:
+        await member.send(embed=build_goodbye_embed(member, settings))
+        log.info("Sent goodbye DM to %s", member)
+    except discord.Forbidden:
+        log.info("Could not DM %s a goodbye (DMs are closed or no shared server).", member)
+    except discord.HTTPException as exc:
+        log.warning("Failed to DM %s a goodbye: %s", member, exc)
 
 
 async def send_direct_message(member: discord.Member, settings: dict[str, Any]) -> None:
@@ -396,15 +394,9 @@ class WelcomeBot(commands.Bot):
         await send_direct_message(member, settings)
 
     async def on_member_remove(self, member: discord.Member) -> None:
-        guild = member.guild
-        settings = self.settings.get(guild.id)
-
-        channel = await find_goodbye_channel(guild, settings)
-        if channel is not None:
-            try:
-                await channel.send(embed=build_goodbye_embed(member, settings))
-            except discord.HTTPException as exc:
-                log.warning("Could not send goodbye message to %s: %s", channel, exc)
+        """Someone left — DM them a farewell instead of posting in any channel."""
+        settings = self.settings.get(member.guild.id)
+        await send_goodbye_dm(member, settings)
 
     # -- error handling --------------------------------------------------- #
 
@@ -448,7 +440,7 @@ class WelcomeGroup(app_commands.Group):
             raise RuntimeError("Command used outside a guild")
         return interaction.guild
 
-    @app_commands.command(name="channel", description="Set the channel where welcome/goodbye messages are posted.")
+    @app_commands.command(name="channel", description="Set the channel where welcome messages are posted.")
     async def channel(
         self,
         interaction: discord.Interaction,
@@ -476,42 +468,6 @@ class WelcomeGroup(app_commands.Group):
         await interaction.response.send_message(
             f"Welcome channel is currently **{current.mention if current else 'the server system channel'}**.\n"
             "Use `/welcome channel <channel>` to change it, or `/welcome channel clear:True` to reset.",
-            ephemeral=True,
-        )
-
-    @app_commands.command(
-        name="goodbye-channel",
-        description="Set a separate channel where leave/goodbye messages are posted.",
-    )
-    async def goodbye_channel(
-        self,
-        interaction: discord.Interaction,
-        channel: Optional[discord.TextChannel] = None,
-        clear: bool = False,
-    ) -> None:
-        guild = self._guild(interaction)
-        store = self.bot.settings
-        if clear:
-            store.set(guild.id, goodbye_channel=None)
-            await interaction.response.send_message(
-                "✅ Goodbye channel cleared — leave messages will use the welcome channel "
-                "(or the system channel) instead.",
-                ephemeral=True,
-            )
-            return
-        if channel is not None:
-            store.set(guild.id, goodbye_channel=channel.id)
-            await interaction.response.send_message(
-                f"✅ Goodbye messages will now be posted to {channel.mention}.",
-                ephemeral=True,
-            )
-            return
-        current_id = store.get(guild.id).get("goodbye_channel")
-        current = guild.get_channel(current_id) if current_id else None
-        await interaction.response.send_message(
-            f"Goodbye channel is currently **{current.mention if current else 'the welcome channel (fallback)'}**.\n"
-            "Use `/welcome goodbye-channel <channel>` to change it, "
-            "or `/welcome goodbye-channel clear:True` to reset.",
             ephemeral=True,
         )
 
@@ -583,7 +539,16 @@ class WelcomeGroup(app_commands.Group):
             ephemeral=True,
         )
 
-    @app_commands.command(name="goodbye", description="Set the message shown when someone leaves.")
+    @app_commands.command(name="goodbye-dm", description="Toggle the farewell DM sent when a member leaves.")
+    async def goodbye_dm(self, interaction: discord.Interaction, enabled: bool) -> None:
+        guild = self._guild(interaction)
+        self.bot.settings.set(guild.id, send_goodbye_dm=enabled)
+        await interaction.response.send_message(
+            f"✅ Goodbye DMs are now **{'on' if enabled else 'off'}**.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="goodbye", description="Set the farewell DM sent when someone leaves.")
     async def goodbye(
         self,
         interaction: discord.Interaction,
@@ -712,7 +677,6 @@ class WelcomeGroup(app_commands.Group):
         guild = self._guild(interaction)
         settings = self.bot.settings.get(guild.id)
         channel = guild.get_channel(settings["welcome_channel"]) if settings["welcome_channel"] else None
-        gb_channel = guild.get_channel(settings["goodbye_channel"]) if settings.get("goodbye_channel") else None
         role = guild.get_role(settings["auto_role"]) if settings["auto_role"] else None
 
         embed = discord.Embed(title="⚙️ Welcome bot settings", color=WELCOME_COLOR)
@@ -722,8 +686,8 @@ class WelcomeGroup(app_commands.Group):
             inline=True,
         )
         embed.add_field(
-            name="💔 Goodbye channel",
-            value=gb_channel.mention if gb_channel else "Welcome channel (fallback)",
+            name="💔 Goodbye DM",
+            value="On" if settings.get("send_goodbye_dm", True) else "Off",
             inline=True,
         )
         embed.add_field(
@@ -742,7 +706,7 @@ class WelcomeGroup(app_commands.Group):
             inline=False,
         )
         embed.add_field(
-            name="💔 Goodbye message",
+            name="💔 Goodbye DM message",
             value=settings["goodbye_message"][:120] or "*(default)*",
             inline=False,
         )
