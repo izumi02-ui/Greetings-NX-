@@ -13,7 +13,7 @@ when they leave). Everything can be configured live in Discord — no code edits
 |---|---|
 | 👋 **Welcome embeds** | Colorful welcome card with avatar, mention, member counter & bottom banner |
 | 🪪 **Custom icon** | Choose your own profile photo (icon) — or use each member's avatar |
-| 💔 **Goodbye messages** | Posts a farewell when someone leaves |
+| 💔 **Goodbye messages** | Posts a farewell when someone leaves — optionally in its own channel |
 | 🎭 **Auto-role** | Assigns a role to every new member automatically |
 | 📨 **Welcome DMs** | Privately DMs each new member (skips users with DMs closed) |
 | 📢 **Smart channel** | Posts to your chosen channel, or falls back to the system channel |
@@ -58,6 +58,7 @@ Open `.env` and fill in at least `DISCORD_TOKEN`:
 |---|---|---|
 | `DISCORD_TOKEN` | ✅ Yes | Your bot token from the Developer Portal |
 | `WELCOME_CHANNEL_ID` | No | Channel ID where welcomes are posted (else system channel) |
+| `GOODBYE_CHANNEL_ID` | No | Channel ID where leave/goodbye messages are posted (else the welcome channel) |
 | `AUTO_ROLE_ID` | No | Role ID auto-assigned to new members |
 | `SYNC_GUILD_ID` | No | Your server ID → slash commands appear instantly |
 | `WELCOME_COLOR` | No | Welcome embed color, hex (default `#5865F2`) |
@@ -91,6 +92,8 @@ All commands require **Manage Server** permission and reply privately:
 |---|---|
 | `/welcome channel <#channel>` | Set where welcome/goodbye messages go |
 | `/welcome channel clear:True` | Reset to the system channel |
+| `/welcome goodbye-channel <#channel>` | Send leave/goodbye messages to a separate channel |
+| `/welcome goodbye-channel clear:True` | Reset — goodbyes go back to the welcome channel |
 | `/welcome role <@role>` | Set auto-assigned role for new members |
 | `/welcome role clear:True` | Remove the auto-role |
 | `/welcome message <text>` | Customize the welcome message |
