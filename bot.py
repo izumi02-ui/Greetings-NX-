@@ -349,7 +349,7 @@ class WelcomeBot(commands.Bot):
                 if guild is None:
                     guild = await self.fetch_guild(int(sync_guild_id))
                 self.tree.copy_global_to(guild=guild)
-await self.tree.sync(guild=guild)
+                await self.tree.sync(guild=guild)
                 log.info("Slash commands synced instantly to guild %s", sync_guild_id)
             else:
                 await self.tree.sync()
