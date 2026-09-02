@@ -474,7 +474,7 @@ class WelcomeGroup(app_commands.Group):
             ephemeral=True,
         )
 
-        @app_commands.command(name="role", description="Set a role that is auto-assigned to every new member.")
+@app_commands.command(name="role", description="Set a role that is auto-assigned to every new member.")
     async def role(
         self,
         interaction: discord.Interaction,
