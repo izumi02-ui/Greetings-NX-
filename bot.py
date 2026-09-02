@@ -474,4 +474,365 @@ class WelcomeGroup(app_commands.Group):
             ephemeral=True,
         )
 
-    @app_commands.com
+        @app_commands.command(name="role", description="Set a role that is auto-assigned to every new member.")
+    async def role(
+        self,
+        interaction: discord.Interaction,
+        role: Optional[discord.Role] = None,
+        clear: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if clear:
+            store.set(guild.id, auto_role=None)
+            await interaction.response.send_message("✅ Auto-role removed.", ephemeral=True)
+            return
+        if role is not None:
+            if role >= guild.me.top_role:
+                await interaction.response.send_message(
+                    "❌ I can't assign that role — it must be **below** my highest role "
+                    "in Server Settings → Roles.",
+                    ephemeral=True,
+                )
+                return
+            if not role.is_assignable():
+                await interaction.response.send_message(
+                    "❌ That role cannot be assigned to members (managed/integration roles can't be used).",
+                    ephemeral=True,
+                )
+                return
+            store.set(guild.id, auto_role=role.id)
+            await interaction.response.send_message(
+                f"✅ Every new member will automatically receive {role.mention}.",
+                ephemeral=True,
+            )
+            return
+        current_id = store.get(guild.id)["auto_role"]
+        current = guild.get_role(current_id) if current_id else None
+        await interaction.response.send_message(
+            f"Auto-role is currently **{current.mention if current else 'disabled'}**.\n"
+            "Use `/welcome role <role>` to set one, or `/welcome role clear:True` to remove it.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="message", description="Set the welcome message shown in the channel.")
+    async def message(
+        self,
+        interaction: discord.Interaction,
+        text: Optional[str] = None,
+        reset: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if reset:
+            store.set(guild.id, welcome_message=DEFAULT_SETTINGS["welcome_message"])
+            await interaction.response.send_message("✅ Welcome message reset to the default.", ephemeral=True)
+            return
+        if text is not None:
+            store.set(guild.id, welcome_message=text.replace("\\n", "\n"))
+            await interaction.response.send_message(
+                "✅ Welcome message updated — run `/welcome preview` to see it.",
+                ephemeral=True,
+            )
+            return
+        current = store.get(guild.id)["welcome_message"]
+        await interaction.response.send_message(
+            f"**Current welcome message:**\n> {current}\n\n"
+            "Placeholders: `{{mention}}` `{{name}}` `{{user}}` `{{server}}` `{{count}}`",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="goodbye-dm", description="Toggle the farewell DM sent when a member leaves.")
+    async def goodbye_dm(self, interaction: discord.Interaction, enabled: bool) -> None:
+        guild = self._guild(interaction)
+        self.bot.settings.set(guild.id, send_goodbye_dm=enabled)
+        await interaction.response.send_message(
+            f"✅ Goodbye DMs are now **{'on' if enabled else 'off'}**.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="goodbye", description="Set the farewell DM sent when someone leaves.")
+    async def goodbye(
+        self,
+        interaction: discord.Interaction,
+        text: Optional[str] = None,
+        reset: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if reset:
+            store.set(guild.id, goodbye_message=DEFAULT_SETTINGS["goodbye_message"])
+            await interaction.response.send_message("✅ Goodbye message reset to the default.", ephemeral=True)
+            return
+        if text is not None:
+            store.set(guild.id, goodbye_message=text.replace("\\n", "\n"))
+            await interaction.response.send_message(
+                "✅ Goodbye message updated — run `/welcome preview` to see the welcome embed.",
+                ephemeral=True,
+            )
+            return
+        current = store.get(guild.id)["goodbye_message"]
+        await interaction.response.send_message(
+            f"**Current goodbye message:**\n> {current}",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="dm", description="Toggle the private DM sent to each new member.")
+    async def dm(self, interaction: discord.Interaction, enabled: bool) -> None:
+        guild = self._guild(interaction)
+        self.bot.settings.set(guild.id, send_dm=enabled)
+        await interaction.response.send_message(
+            f"✅ Private welcome DM is now **{'on' if enabled else 'off'}**.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="dm-message", description="Set the text of the private DM sent on join.")
+    async def dm_message(
+        self,
+        interaction: discord.Interaction,
+        text: Optional[str] = None,
+        reset: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if reset:
+            store.set(guild.id, dm_message=DEFAULT_SETTINGS["dm_message"])
+            await interaction.response.send_message("✅ DM message reset to the default.", ephemeral=True)
+            return
+        if text is not None:
+            store.set(guild.id, dm_message=text.replace("\\n", "\n"))
+            await interaction.response.send_message("✅ DM message updated.", ephemeral=True)
+            return
+        current = store.get(guild.id)["dm_message"]
+        await interaction.response.send_message(f"**Current DM message:**\n> {current}", ephemeral=True)
+
+    @app_commands.command(name="preview", description="Preview the embed new members will see.")
+    async def preview(self, interaction: discord.Interaction) -> None:
+        guild = self._guild(interaction)
+        settings = self.bot.settings.get(guild.id)
+        channel = await find_welcome_channel(guild, settings)
+        location = channel.mention if channel else "no channel found (nothing will be posted)"
+        embed = build_welcome_embed(interaction.user, settings)  # user is a Member here
+        await interaction.response.send_message(
+            f"👀 This is what new members will see in {location}:",
+            embed=embed,
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="banner", description="Set the banner image shown at the bottom of the welcome embed.")
+    async def banner(
+        self,
+        interaction: discord.Interaction,
+        url: Optional[str] = None,
+        reset: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if reset:
+            store.set(guild.id, welcome_banner=DEFAULT_SETTINGS["welcome_banner"])
+            await interaction.response.send_message("✅ Welcome banner reset to the default.", ephemeral=True)
+            return
+        if url:
+            store.set(guild.id, welcome_banner=url.strip())
+            await interaction.response.send_message(
+                "✅ Welcome banner updated — run `/welcome preview` to see it.", ephemeral=True
+            )
+            return
+        current = store.get(guild.id)["welcome_banner"]
+        await interaction.response.send_message(
+            f"**Current banner:**\n{current}\n\nUse `/welcome banner <url>` to change it, "
+            "or `/welcome banner reset:True` to restore the default.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="icon", description="Set the icon/profile photo shown on the welcome embed.")
+    async def icon(
+        self,
+        interaction: discord.Interaction,
+        url: Optional[str] = None,
+        clear: bool = False,
+    ) -> None:
+        guild = self._guild(interaction)
+        store = self.bot.settings
+        if clear:
+            store.set(guild.id, welcome_icon=None)
+            await interaction.response.send_message(
+                "✅ Icon cleared — each new member's own profile photo will be used.", ephemeral=True
+            )
+            return
+        if url:
+            store.set(guild.id, welcome_icon=url.strip())
+            await interaction.response.send_message(
+                "✅ Welcome icon updated — run `/welcome preview` to see it.", ephemeral=True
+            )
+            return
+        current = store.get(guild.id)["welcome_icon"]
+        icon_display = current if current else "each member's own profile photo"
+        await interaction.response.send_message(
+            f"**Current icon:** {icon_display}\n\n"
+            "Use `/welcome icon <url>` to set your own profile photo, "
+            "or `/welcome icon clear:True` to use each member's avatar.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="settings", description="Show the current welcome-bot configuration.")
+    async def settings(self, interaction: discord.Interaction) -> None:
+        guild = self._guild(interaction)
+        settings = self.bot.settings.get(guild.id)
+        channel = guild.get_channel(settings["welcome_channel"]) if settings["welcome_channel"] else None
+        role = guild.get_role(settings["auto_role"]) if settings["auto_role"] else None
+
+        embed = discord.Embed(title="⚙️ Welcome bot settings", color=WELCOME_COLOR)
+        embed.add_field(
+            name="📢 Welcome channel",
+            value=channel.mention if channel else "System channel (fallback)",
+            inline=True,
+        )
+        embed.add_field(
+            name="💔 Goodbye DM",
+            value="On" if settings.get("send_goodbye_dm", True) else "Off",
+            inline=True,
+        )
+        embed.add_field(
+            name="🎭 Auto role",
+            value=role.mention if role else "Disabled",
+            inline=True,
+        )
+        embed.add_field(
+            name="📨 DM on join",
+            value="On" if settings["send_dm"] else "Off",
+            inline=True,
+        )
+        embed.add_field(
+            name="👋 Welcome message",
+            value=settings["welcome_message"][:120] or "*(default)*",
+            inline=False,
+        )
+        embed.add_field(
+            name="💔 Goodbye DM message",
+            value=settings["goodbye_message"][:120] or "*(default)*",
+            inline=False,
+        )
+        embed.add_field(
+            name="📬 DM message",
+            value=settings["dm_message"][:120] or "*(default)*",
+            inline=False,
+        )
+        embed.add_field(
+            name="🖼️ Banner (bottom)",
+            value=settings["welcome_banner"][:120] or "*(none)*",
+            inline=False,
+        )
+        embed.add_field(
+            name="🪪 Icon",
+            value=settings["welcome_icon"][:120] if settings["welcome_icon"] else "Member's profile photo",
+            inline=False,
+        )
+        embed.add_field(
+            name="🗒️ Footer",
+            value=settings["welcome_footer_text"][:120] or "*(none)*",
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# --------------------------------------------------------------------------- #
+# Voice commands: /join and /leave
+# --------------------------------------------------------------------------- #
+@app_commands.command(name="join", description="Make the bot join a voice channel.")
+@app_commands.describe(channel="Voice channel to join (defaults to the one you're in).")
+@app_commands.guild_only()
+async def join_voice(
+    interaction: discord.Interaction,
+    channel: Optional[discord.VoiceChannel] = None,
+) -> None:
+    guild = interaction.guild
+    if guild is None:
+        await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+        return
+
+    # Fall back to whatever voice channel the caller is sitting in.
+    if channel is None:
+        author_voice = getattr(interaction.user, "voice", None)
+        if author_voice is None or author_voice.channel is None:
+            await interaction.response.send_message(
+                "❌ You're not in a voice channel — join one first, or use `/join channel:<#voice>`.",
+                ephemeral=True,
+            )
+            return
+        channel = author_voice.channel
+
+    perms = channel.permissions_for(guild.me)
+    if not perms.connect:
+        await interaction.response.send_message(
+            f"❌ I don't have permission to connect to **{channel.name}**.", ephemeral=True
+        )
+        return
+    if channel.user_limit and len(channel.members) >= channel.user_limit and not perms.move_members:
+        await interaction.response.send_message(
+            f"❌ **{channel.name}** is full.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    voice = guild.voice_client
+    try:
+        if voice is not None and voice.is_connected():
+            if voice.channel.id == channel.id:
+                await interaction.followup.send(f"✅ Already connected to {channel.mention}.", ephemeral=True)
+                return
+            await voice.move_to(channel)
+            await interaction.followup.send(f"✅ Moved to {channel.mention}.", ephemeral=True)
+        else:
+            await channel.connect(self_deaf=True)
+            await interaction.followup.send(f"✅ Joined {channel.mention}.", ephemeral=True)
+        log.info("Joined voice channel %s in %s", channel, guild)
+    except asyncio.TimeoutError:
+        await interaction.followup.send("❌ Timed out while connecting to the voice channel.", ephemeral=True)
+    except discord.ClientException as exc:
+        await interaction.followup.send(f"❌ Could not connect: {exc}", ephemeral=True)
+    except RuntimeError as exc:  # PyNaCl missing, etc.
+        log.error("Voice connect failed: %s", exc)
+        await interaction.followup.send(
+            "❌ Voice support is not installed on the host. Run `pip install -U \"discord.py[voice]\"`.",
+            ephemeral=True,
+        )
+
+
+@app_commands.command(name="leave", description="Disconnect the bot from the voice channel.")
+@app_commands.guild_only()
+async def leave_voice(interaction: discord.Interaction) -> None:
+    guild = interaction.guild
+    if guild is None:
+        await interaction.response.send_message("This command only works in a server.", ephemeral=True)
+        return
+
+    voice = guild.voice_client
+    if voice is None or not voice.is_connected():
+        await interaction.response.send_message("❌ I'm not in a voice channel.", ephemeral=True)
+        return
+
+    name = voice.channel.mention if voice.channel else "the voice channel"
+    await voice.disconnect(force=False)
+    log.info("Left voice channel in %s", guild)
+    await interaction.response.send_message(f"👋 Left {name}.", ephemeral=True)
+
+
+# --------------------------------------------------------------------------- #
+# Entry point
+# --------------------------------------------------------------------------- #
+bot = WelcomeBot()
+
+
+async def main() -> None:
+    if not TOKEN:
+        log.error("No bot token found. Copy `.env.example` to `.env` and set DISCORD_TOKEN.")
+        raise SystemExit(1)
+    try:
+        await bot.start(TOKEN)
+    except KeyboardInterrupt:
+        await bot.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
