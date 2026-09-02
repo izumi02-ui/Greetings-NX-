@@ -331,6 +331,8 @@ class WelcomeBot(commands.Bot):
     async def on_ready(self) -> None:
         assert self.user is not None
         log.info("Logged in as %s (ID: %s) — connected to %d guild(s)", self.user, self.user.id, len(self.guilds))
+        for g in self.guilds:
+            log.info("GUILD: %s | ID: %s  <-- use this for SYNC_GUILD_ID", g.name, g.id)
         await self.change_presence(
             activity=discord.Activity(type=discord.ActivityType.watching, name="new members 👋")
         )
@@ -352,7 +354,14 @@ class WelcomeBot(commands.Bot):
                 await self.tree.sync()
                 log.info("Slash commands synced globally (can take up to an hour to appear)")
         except Exception as exc:  # noqa: BLE001
-            log.error("Could not sync slash commands: %s", exc)
+            log.error(
+                "Guild sync to %s failed (%s) — falling back to a global sync.", sync_guild_id, exc
+            )
+            try:
+                await self.tree.sync()
+                log.info("Slash commands synced globally instead (may take up to an hour to appear).")
+            except Exception as exc2:  # noqa: BLE001
+                log.error("Global sync also failed: %s", exc2)
 
     async def _heartbeat(self) -> None:
         """Serve a tiny HTTP endpoint so free hosts (Render Web Service, etc.)
