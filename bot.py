@@ -794,7 +794,7 @@ async def join_voice(
             await voice.move_to(channel)
             await interaction.followup.send(f"✅ Moved to {channel.mention}.", ephemeral=True)
         else:
-            await channel.connect(self_deaf=True)
+            await channel.connect(self_deaf=False)
             await interaction.followup.send(f"✅ Joined {channel.mention}.", ephemeral=True)
         log.info("Joined voice channel %s in %s", channel, guild)
     except asyncio.TimeoutError:
