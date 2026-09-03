@@ -334,7 +334,11 @@ class WelcomeBot(commands.Bot):
         for g in self.guilds:
             log.info("GUILD: %s | ID: %s  <-- use this for SYNC_GUILD_ID", g.name, g.id)
         await self.change_presence(
-            activity=discord.Activity(type=discord.ActivityType.watching, name="new members 👋")
+    status=discord.Status.idle,
+    activity=discord.Activity(
+        type=discord.ActivityType.watching,
+        name="Watching over Nexus✨, Hehe >_<",
+    ),
         )
         await self.sync_commands()
         asyncio.create_task(self._heartbeat())  # keeps free web hosts happy
