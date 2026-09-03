@@ -315,18 +315,22 @@ async def send_direct_message(member: discord.Member, settings: dict[str, Any]) 
 # The bot
 # --------------------------------------------------------------------------- #
 class WelcomeBot(commands.Bot):
-    def __init__(self) -> None:
+        def __init__(self) -> None:
         intents = discord.Intents.default()
-        intents.members = True        # required for member join/leave events
-        intents.voice_states = True   # required for /join and /leave voice commands
-        super().__init__(command_prefix=commands.when_mentioned, intents=intents)
+        intents.members = True
+        intents.voice_states = True
+
+        super().__init__(
+            command_prefix=commands.when_mentioned,
+            intents=intents,
+            status=discord.Status.idle,
+        )
+
         self.settings = SettingsStore()
         self.tree.add_command(WelcomeGroup(self))
         self.tree.add_command(join_voice)
         self.tree.add_command(leave_voice)
-        self.tree.error(self.on_tree_error)
-
-    # -- lifecycle -------------------------------------------------------- #
+        self.tree.error(self.on_tree_error)    # -- lifecycle -------------------------------------------------------- #
 
     async def on_ready(self) -> None:
         assert self.user is not None
