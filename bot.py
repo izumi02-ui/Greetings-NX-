@@ -96,7 +96,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "goodbye_message": "{name} just left **{server}**. We'll miss you! 👋",
     "dm_message": (
         "Hey {name}! 👋 Welcome to **{server}**! "
-        "Take a moment to read the rules, then introduce yourself in #introduction. Enjoy your stay!"
+        "Take a moment to read the rules, then introduce yourself in <#1479106973206188073>. Enjoy your stay!"
     ),
     "welcome_banner": os.getenv(
         "WELCOME_BANNER",
