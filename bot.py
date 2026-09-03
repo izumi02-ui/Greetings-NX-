@@ -315,7 +315,7 @@ async def send_direct_message(member: discord.Member, settings: dict[str, Any]) 
 # The bot
 # --------------------------------------------------------------------------- #
 class WelcomeBot(commands.Bot):
-        def __init__(self) -> None:
+    def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.members = True
         intents.voice_states = True
@@ -330,20 +330,34 @@ class WelcomeBot(commands.Bot):
         self.tree.add_command(WelcomeGroup(self))
         self.tree.add_command(join_voice)
         self.tree.add_command(leave_voice)
-        self.tree.error(self.on_tree_error)    # -- lifecycle -------------------------------------------------------- #
+        self.tree.error(self.on_tree_error)
+
+    # -- lifecycle -------------------------------------------------------- #
 
     async def on_ready(self) -> None:
         assert self.user is not None
-        log.info("Logged in as %s (ID: %s) — connected to %d guild(s)", self.user, self.user.id, len(self.guilds))
-        for g in self.guilds:
-            log.info("GUILD: %s | ID: %s  <-- use this for SYNC_GUILD_ID", g.name, g.id)
-        await self.change_presence(
-    status=discord.Status.idle,
-    activity=discord.Activity(
-        type=discord.ActivityType.watching,
-        name="Watching over Nexus✨, Hehe >_<",
-    ),
+        log.info(
+            "Logged in as %s (ID: %s) — connected to %d guild(s)",
+            self.user,
+            self.user.id,
+            len(self.guilds),
         )
+
+        for guild in self.guilds:
+            log.info(
+                "GUILD: %s | ID: %s  <-- use this for SYNC_GUILD_ID",
+                guild.name,
+                guild.id,
+            )
+
+        await self.change_presence(
+            status=discord.Status.idle,
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="Watching over Nexus✨, Hehe >_<",
+            ),
+        )
+
         await self.sync_commands()
         asyncio.create_task(self._heartbeat())  # keeps free web hosts happy
 
